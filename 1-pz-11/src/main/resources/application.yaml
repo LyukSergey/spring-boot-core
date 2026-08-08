@@ -1,3 +1,21 @@
+server:
+  # слухаємо 9090 замість дефолтного 8080 (Convention over Configuration)
+  port: 9090
+
 spring:
   application:
-    name: 1-pz-11
+    name: library
+
+logging:
+  level:
+    root: INFO
+
+# власний префікс для ендпоінтів Actuator замість дефолтного /actuator
+management:
+  endpoints:
+    web:
+      base-path: /manage
+
+# власне налаштування застосунку — читається через @Value у BookService
+library:
+  max-books: 100
