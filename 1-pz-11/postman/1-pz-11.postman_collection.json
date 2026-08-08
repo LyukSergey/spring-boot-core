@@ -1,0 +1,373 @@
+{
+  "info": {
+    "name": "1-pz-11 — Каталог книг (Spring Boot REST API)",
+    "description": "Колекція для тестування REST API каталогу книг.\n\nБазовий URL: {{baseUrl}} (за замовчуванням http://localhost:9090).\n\nЕндпоінти:\n- GET  /hello\n- GET  /books\n- GET  /books/{id}\n- POST /books\n- POST /books/{id}/borrow\n- POST /books/{id}/return\n- DELETE /books/{id}\n- GET  /manage/health (Actuator)\n\nОбробка помилок: 404 (книгу не знайдено), 409 (ліміт / вже видано).\n\nПорада: запусти всю колекцію через Collection Runner — запити впорядковані так, щоб проходити сценарій зверху вниз.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9090",
+      "type": "string"
+    },
+    {
+      "key": "createdId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Hello",
+      "item": [
+        {
+          "name": "GET /hello",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hello",
+              "host": ["{{baseUrl}}"],
+              "path": ["hello"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));",
+                  "pm.test('містить привітання', () => pm.expect(pm.response.text()).to.include('Каталог книг'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Books",
+      "item": [
+        {
+          "name": "GET /books — усі книги",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": ["{{baseUrl}}"],
+              "path": ["books"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('повертає масив', () => pm.expect(body).to.be.an('array'));",
+                  "pm.test('є щонайменше 3 стартові книги', () => pm.expect(body.length).to.be.at.least(3));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /books/1 — одна книга",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "1"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('id = 1', () => pm.expect(b.id).to.eql(1));",
+                  "pm.test('має поля title/author/year/available', () => {",
+                  "  pm.expect(b).to.have.all.keys('id','title','author','year','available');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /books — додати книгу",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Домен-орієнтований дизайн\",\n  \"author\": \"Ерік Еванс\",\n  \"year\": 2003\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": ["{{baseUrl}}"],
+              "path": ["books"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('отримав згенерований id', () => pm.expect(b.id).to.be.a('number'));",
+                  "pm.test('нова книга доступна', () => pm.expect(b.available).to.be.true);",
+                  "pm.collectionVariables.set('createdId', b.id);",
+                  "console.log('createdId =', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /books/{{createdId}} — щойно створена",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{createdId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "{{createdId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('id збігається з createdId', () => pm.expect(String(b.id)).to.eql(pm.collectionVariables.get('createdId')));",
+                  "pm.test('автор = Ерік Еванс', () => pm.expect(b.author).to.eql('Ерік Еванс'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Borrow / Return",
+      "item": [
+        {
+          "name": "POST /books/{{createdId}}/borrow — видати",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{createdId}}/borrow",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "{{createdId}}", "borrow"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));",
+                  "pm.test('available = false', () => pm.expect(pm.response.json().available).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /books/{{createdId}}/borrow — повторно (409)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{createdId}}/borrow",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "{{createdId}}", "borrow"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('detail про вже видану книгу', () => pm.expect(pm.response.json().detail).to.include('вже видано'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /books/{{createdId}}/return — повернути",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{createdId}}/return",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "{{createdId}}", "return"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));",
+                  "pm.test('available = true', () => pm.expect(pm.response.json().available).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /books/{{createdId}} — видалити",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{createdId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "{{createdId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Errors",
+      "item": [
+        {
+          "name": "GET /books/999 — не знайдено (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/999",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "999"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('detail про відсутність книги', () => pm.expect(pm.response.json().detail).to.include('не знайдено'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /books/999/borrow — не знайдено (404)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/999/borrow",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "999", "borrow"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /books/999 — не знайдено (404)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/999",
+              "host": ["{{baseUrl}}"],
+              "path": ["books", "999"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Actuator",
+      "item": [
+        {
+          "name": "GET /manage/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/manage/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["manage", "health"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('статус 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status = UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
