@@ -1,0 +1,16 @@
+report:
+  # 1-го числа кожного місяця о 08:00 — авторозсилка звіту за попередній місяць
+  cron: "0 0 8 1 * *"
+  recipients: ${REPORT_RECIPIENTS:boss@example.com,sales-lead@example.com}
+  font-path: "classpath:fonts/DejaVuSans.ttf"
+
+spring:
+  mail:
+    # Секрети НЕ в git: значення беруться зі змінних оточення.
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true

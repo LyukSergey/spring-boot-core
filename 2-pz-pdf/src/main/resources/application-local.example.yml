@@ -1,0 +1,18 @@
+# Приклад локального конфігу з SMTP-секретами.
+# Скопіюй у application-local.yml (він у .gitignore) і запускай з профілем local:
+#   MAIL_USERNAME=you@gmail.com MAIL_PASSWORD=app_password \
+#   REPORT_RECIPIENTS=boss@example.com,lead@example.com \
+#   mvn spring-boot:run
+#
+# Або пропиши напряму тут (у application-local.yml, НЕ в цьому example-файлі):
+spring:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your@gmail.com
+    password: YOUR_APP_PASSWORD
+
+report:
+  recipients:
+    - boss@example.com
+    - sales-lead@example.com

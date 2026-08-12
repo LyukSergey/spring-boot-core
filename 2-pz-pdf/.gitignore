@@ -32,3 +32,22 @@ build/
 ### VS Code ###
 .vscode/
 pz-2-pdf.md
+
+### macOS ###
+.DS_Store
+**/.DS_Store
+
+### Maven ###
+target/
+!.mvn/wrapper/maven-wrapper.jar
+dependency-reduced-pom.xml
+
+### Secrets / local config (SMTP паролі НЕ в git!) ###
+application-local.yml
+application-local.yaml
+application-local.properties
+application-secret*.yml
+*.env
+.env
+.env.*
+secrets/
