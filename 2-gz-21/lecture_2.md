@@ -29,12 +29,12 @@
 | 3 | Сутність `@Entity`, `@Id`, генерація ключів, `@Column` | 30 хв |
 | 4 | `JpaRepository`, derived queries, `@Query`, пагінація/сортування | 40 хв |
 | — | **Перерва** | 10 хв |
-| 5 | Шари: Controller → Service → Repository. DTO та мапінг | 30 хв |
-| 6 | Валідація, обробка помилок (`@ExceptionHandler`) | 25 хв |
-| 7 | Зв'язки: `@OneToMany` / `@ManyToOne` / `@ManyToMany`, LAZY vs EAGER, N+1 | 40 хв |
-| 8 | Транзакції `@Transactional`: межі, rollback, пастки | 25 хв |
-| 9 | PostgreSQL замість H2, міграції, тести шару даних | 20 хв |
-| 10 | Підсумок + міст до 14 год практики | 10 хв |
+| 5 | Шари: Controller → Service → Repository. DTO, валідація, обробка помилок | 40 хв |
+| 6 | Зв'язки: `@ManyToOne` / `@OneToMany` / `@ManyToMany`, LAZY vs EAGER, N+1 | 35 хв |
+| 7 | Транзакції `@Transactional`: rollback, `readOnly`, проксі й самовиклик, 5 правил | 30 хв |
+| 8 | PostgreSQL замість H2 + міграції (Flyway та Liquibase) | 30 хв |
+| 9 | `DataSeeder` (наповнення БД) + тести шару даних `@DataJpaTest` | 20 хв |
+| 10 | Фінальна вправа (пошук+пагінація, `GET /{id}`) + міст до 14 год практики | 15 хв |
 
 > **Позначки по тексту:**
 > **▶ Запусти зараз** — зупиняємось, запускаємо, дивимось реальний вивід (не рухаємось далі, поки не побачили).
@@ -143,7 +143,7 @@ spring:
     password: ""
   jpa:
     hibernate:
-      ddl-auto: update        # Hibernate САМ створює/оновлює таблиці за @Entity (для навчання; про prod — Блок 9)
+      ddl-auto: update        # Hibernate САМ створює/оновлює таблиці за @Entity (для навчання; про prod — Блок 8)
     show-sql: true            # друкувати SQL у консоль — БЕЗЦІННО для навчання
     properties:
       hibernate:
@@ -154,7 +154,7 @@ spring:
       path: /h2-console
 ```
 
-> **`ddl-auto`:** `update` зручний для навчання (таблиці з'являються самі). У проді використовують `validate` + окремі міграції (Flyway/Liquibase) — про це в Блоці 9.
+> **`ddl-auto`:** `update` зручний для навчання (таблиці з'являються самі). У проді використовують `validate` + окремі міграції (Flyway/Liquibase) — про це в Блоці 8.
 
 **Що сталося магічного:** ми не написали жодного рядка налаштування з'єднання з БД у Java. Spring Boot **автоконфігурація** побачила H2 у classpath і сама створила `DataSource`, `EntityManager`, `TransactionManager`. Це та сама «згортка складності», що й `@SpringBootApplication` з Лекції 1.
 
@@ -361,7 +361,7 @@ page.getTotalPages();
 
 ---
 
-## Блок 5. Шари: Controller → Service → Repository + DTO
+## Блок 5. Шари: Controller → Service → Repository + DTO, валідація й помилки
 
 ### Чому DTO, а не віддавати сутність напряму
 
@@ -427,7 +427,7 @@ public class StudentService {
                 .toList();
     }
 
-    @Transactional   // запис → повноцінна транзакція (про це Блок 8)
+    @Transactional   // запис → повноцінна транзакція (про це Блок 7)
     public StudentDto create(CreateStudentRequest req) {
         if (repo.existsByEmail(req.email())) {
             throw new IllegalStateException("Студент з таким email вже існує");
@@ -555,41 +555,8 @@ HTTP/1.1 204 No Content
 
 Онови H2-консоль (`SELECT * FROM students`) — переконайся, що рядок зник.
 
-### Опційно: авто-наповнення БД на старті (щоб було що читати)
-
-Щоб не створювати студентів руками щоразу, додай сідер (лише для навчання/dev):
-
-`src/main/java/com/example/school/DataSeeder.java`:
-
-```java
-package com.example.school;
-
-import com.example.school.student.Student;
-import com.example.school.student.StudentRepository;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.stereotype.Component;
-
-@Component
-public class DataSeeder implements CommandLineRunner {
-
-    private final StudentRepository repo;
-    public DataSeeder(StudentRepository repo) { this.repo = repo; }
-
-    @Override
-    public void run(String... args) {
-        if (repo.count() > 0) return;   // не дублювати при перезапуску
-        repo.save(new Student("Іван", "Іваненко", "КН-11", "ivan@ex.com"));
-        repo.save(new Student("Петро", "Петренко", "КН-11", "petro@ex.com"));
-        repo.save(new Student("Сидір", "Сидоренко", "КН-12", "sydir@ex.com"));
-    }
-}
-```
-
-Тепер після старту в БД одразу 3 студенти — зручно демонструвати GET.
-
----
-
-## Блок 6. Валідація та обробка помилок
+> **💡 Щоб було що читати:** аби не створювати студентів руками щоразу, зручно додати `DataSeeder`,
+> який наповнює БД при старті. Повний код і чому він **лише для dev** — у **Блоці 9**.
 
 ### Валідація на вході
 
@@ -685,14 +652,16 @@ public class GlobalExceptionHandler {
 >
 > *Ключова думка:* жодного 500 і stack trace — клієнт бачить **зрозумілу помилку з правильним кодом**.
 
-> **✍ Міні-вправа №3 (8 хв).** Додай ендпоінт `GET /students/{id}` (один студент за id).
-> Якщо не знайдено — кинь `StudentNotFoundException` (він уже дає 404 через advice).
-> Перевір `curl`-ом обидва випадки: наявний id (200 + JSON) і відсутній (404).
-> *Підказка:* у сервісі — `repo.findById(id).map(StudentService::toDto).orElseThrow(() -> new StudentNotFoundException(id))`.
+> **✍ Міні-вправа №3 (8 хв).** Перевір усі три коди помилок «руками». Надішли `curl`-ом:
+> **(а)** порожнє `firstName` і кривий `email` → маєш отримати **400** з переліком полів;
+> **(б)** `DELETE /students/999` (неіснуючий) → **404**;
+> **(в)** двічі створи студента з тим самим `email` → другий раз **409 Conflict**.
+> *Питання для обговорення:* чому `@RestControllerAdvice` кращий за `try/catch` у кожному контролері?
+> *(Ендпоінт `GET /students/{id}` зберемо у фінальному блоці — Міні-вправа №4.)*
 
 ---
 
-## Блок 7. Зв'язки між сутностями
+## Блок 6. Зв'язки між сутностями
 
 Реальні дані пов'язані: студент належить групі, у групи багато студентів, студент має багато оцінок. Змоделюймо це.
 
@@ -812,9 +781,9 @@ Spring/Hibernate **сам створить проміжну таблицю** `st
 
 ---
 
-## Блок 8. Транзакції `@Transactional`
+## Блок 7. Транзакції `@Transactional`
 
-**Транзакція** — група операцій, що виконуються «все або нічого». Якщо посеред запису стається помилка — усі зміни **відкочуються** (rollback), БД лишається в узгодженому стані.
+**Транзакція** — група операцій, що виконуються «все або нічого». Якщо посеред запису стається помилка — усі зміни **відкочуються** (rollback), БД лишається в узгодженому стані. `@Transactional` ставлять **на рівні сервісу** (клас або окремий метод) — це природна межа бізнес-операції.
 
 ### Приклад, де це критично
 
@@ -822,7 +791,7 @@ Spring/Hibernate **сам створить проміжну таблицю** `st
 @Transactional
 public void transferStudent(Long studentId, String newGroup) {
     Student s = repo.findById(studentId).orElseThrow();
-    s.setGroupName(newGroup);          // зміна 1
+    s.setGroupName(newGroup);           // зміна 1
     auditRepo.save(new Audit("moved")); // зміна 2
     if (somethingWrong) {
         throw new RuntimeException();   // ← ОБИДВІ зміни відкотяться, БД чиста
@@ -830,35 +799,102 @@ public void transferStudent(Long studentId, String newGroup) {
 }
 ```
 
-### Правила, які треба знати (і які часто ламають)
+Дві зміни бази йдуть в одній транзакції: змінили групу студента **і** зберегли аудит. Якщо після цього кинути `RuntimeException` — обидві зміни не застосуються, база лишається в узгодженому стані.
 
-1. **`@Transactional` за замовчуванням відкочується лише на `RuntimeException`** (unchecked).
-   Checked-виняток НЕ викликає rollback, якщо не вказати `rollbackFor`.
+### Пастка №1 — самовиклик (`this.method()`)
 
-2. **`readOnly = true`** для методів лише-читання — підказка драйверу/Hibernate, невелика оптимізація.
+Найпоширеніша пастка. `@Transactional` працює через **проксі** Spring. Виклик анотованого методу **з того самого класу** (`this.doWork()`) йде повз проксі — транзакція **не відкривається**.
 
-3. **Самовиклик не працює.** Виклик `@Transactional`-методу з іншого методу ТОГО Ж класу
-   йде повз проксі Spring — транзакція **не відкриється**. Транзакційний метод має викликатись
-   ззовні (з іншого біна).
+`OrderService.java`:
 
-   ```java
-   // ❌ НЕ спрацює: this.doWork() йде повз проксі
-   public void outer() { this.doWork(); }
-   @Transactional public void doWork() { ... }
-   ```
+```java
+// ❌ Самовиклик — транзакція НЕ відкриється
+@Service
+public class OrderService {
 
-4. **Не лови й не «глуши» виняток усередині** транзакції, якщо хочеш rollback — проковтнутий
-   виняток означає «все добре», і транзакція закомітиться.
+    public void outer() {
+        this.doWork();          // йде повз проксі Spring
+    }
 
-5. **`@Transactional` не працює на `@PostConstruct`** і на приватних методах.
+    @Transactional
+    public void doWork() {
+        // транзакція не активна — self-invocation
+    }
+}
 
-> Ставте `@Transactional` **на рівні сервісу** (не контролера, не репозиторію) — це природна межа бізнес-операції.
+// ✅ Правильно — транзакційний метод у окремому біні
+@Service
+@RequiredArgsConstructor
+public class OrderProcessor {
+
+    @Transactional
+    public void doWork() {
+        // тут транзакція активна: виклик прийшов ЗЗОВНІ, через проксі
+    }
+}
+
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+    private final OrderProcessor processor;   // інший бін → інший проксі
+
+    public void outer() {
+        processor.doWork();     // виклик через проксі → транзакція відкривається
+    }
+}
+```
+
+**Виправлення:** винести транзакційний метод в окремий бін і викликати його ззовні (через ін'єктований бін), а не через `this`.
+
+### Що Spring НАСПРАВДІ кладе в контейнер (проксі)
+
+Spring не кладе у контейнер ваш оригінальний `OrderProcessor`. Під час старту він **генерує підклас** (CGLIB-проксі), який перехоплює виклик, відкриває транзакцію, викликає ваш код і робить commit або rollback:
+
+```java
+// Спрощена модель згенерованого проксі-класу (CGLIB-підклас).
+class OrderProcessor$$SpringCGLIB extends OrderProcessor {
+    private final TransactionManager txManager;
+    private final OrderProcessor target;   // ваш справжній об'єкт
+
+    @Override
+    public void doWork() {
+        TransactionStatus tx = txManager.getTransaction(...);   // 1. відкрити транзакцію
+        try {
+            target.doWork();                                    // 2. викликати ваш код
+            txManager.commit(tx);                               // 3a. успіх → commit
+        } catch (RuntimeException e) {
+            txManager.rollback(tx);                             // 3b. RuntimeException → rollback
+            throw e;
+        }
+    }
+}
+```
+
+Так Spring додає транзакційну логіку **без зміни вашого коду**. Виклик ззовні завжди йде через проксі; виклик через `this` проксі не бачить — тому й транзакція не відкривається.
+
+### 5 правил `@Transactional` (з прикладами)
+
+| Правило | ✅ Правильно | ❌ Неправильно |
+|---------|-------------|----------------|
+| **Відкат лише на `RuntimeException`** | `@Transactional void save() { throw new RuntimeException(); }` | `@Transactional void save() throws Exception { throw new Exception(); }` (checked → rollback НЕ буде без `rollbackFor`) |
+| **`readOnly` для читання** | `@Transactional(readOnly = true) List<StudentDto> list() { ... }` | `@Transactional List<StudentDto> list() { ... }` (зайвий overhead на читанні) |
+| **Не самовиклик** | викликати з іншого біна: `service.doWork();` | `public void outer() { this.doWork(); }` |
+| **Не ігнорувати виняток** | дати винятку вийти назовні | `try { ... } catch (Exception e) { log.error(e); }` — проковтнутий виняток = commit |
+| **Не приватний метод** | `@Transactional public void doWork() { ... }` | `@Transactional private void doWork() { ... }` (і так само не працює на `@PostConstruct`) |
+
+> **`readOnly = true`** — підказка Hibernate: не робити знімків завантажених сутностей і не порівнювати їх наприкінці транзакції. Невелика, але безкоштовна оптимізація для методів лише-читання.
 
 ---
 
-## Блок 9. Від H2 до PostgreSQL + міграції + тести
+## Блок 8. Від H2 до PostgreSQL + міграції
 
-### Заміна H2 на PostgreSQL (як у проді)
+### Перехід з H2 на PostgreSQL — кроки
+
+1. Додати драйвер PostgreSQL у `pom.xml`.
+2. Оновити параметри з'єднання у `application.yml` (адреса, `username`, `password`).
+3. Змінити `ddl-auto` на `validate` (Hibernate лише перевіряє схему).
+4. Розгорнути PostgreSQL локально через `docker-compose`.
+5. Запустити застосунок і перевірити з'єднання з базою.
 
 `pom.xml`:
 
@@ -901,11 +937,157 @@ services:
 
 ### Чому `ddl-auto: update` не для прода
 
-`update` зручний, але **непередбачуваний**: не вміє видаляти/перейменовувати, може мовчки не застосувати зміну. У проді схему змінюють **міграціями** — версійованими SQL-скриптами (**Flyway** або **Liquibase**). Кожна зміна = окремий пронумерований файл, що виконується один раз. Це виходить за межі цієї лекції, але **знайте, що так треба** — на практиці згодиться.
+`update` зручний для навчання (таблиці з'являються самі), але у проді **небезпечний**:
+- не вміє видаляти/перейменовувати колонки;
+- може **мовчки** не застосувати зміну.
+
+У проді ставлять `ddl-auto: validate`, а схему змінюють **міграціями** — версійованими файлами, де кожна зміна = окремий пронумерований файл, що виконується рівно один раз. Два найпопулярніші інструменти — **Flyway** і **Liquibase**.
+
+### Міграції через Flyway
+
+Flyway використовує звичайні SQL-файли з префіксом версії. Файл `V1__init.sql` виконається рівно один раз при першому старті:
+
+`src/main/resources/db/migration/V1__init.sql`:
+
+```sql
+-- Flyway виконає цей файл один раз при першому старті
+CREATE TABLE students (
+    id          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    first_name  VARCHAR(100) NOT NULL,
+    last_name   VARCHAR(100) NOT NULL,
+    group_name  VARCHAR(20)  NOT NULL,
+    email       VARCHAR(255) UNIQUE
+);
+```
+
+**Структура Flyway** (папка `src/main/resources/db/migration/`):
+
+```
+src/main/resources/db/migration/
+├── V1__init.sql                  ← початкова схема
+└── V2__add_enrollment_year.sql   ← наступні зміни
+```
+
+Flyway виконує файли **по порядку версій**, кожен — лише один раз. Історію виконаних міграцій зберігає у службовій таблиці `flyway_schema_history`.
+
+### Міграції через Liquibase (XML)
+
+Той самий підхід, але через XML (або YAML/JSON). Потрібні головний changelog і файли з окремими змінами.
+
+Головний файл — точка входу, що підключає інші:
+
+`src/main/resources/db/changelog/db.changelog-master.xml`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <include file="db/changelog/changes/001-create-students.xml"/>
+</databaseChangeLog>
+```
+
+Конкретна міграція. Тег `<changeSet>` має `id` та `author` — Liquibase зберігає ці дані у службовій таблиці й **ніколи не виконує той самий changeSet двічі**:
+
+`src/main/resources/db/changelog/changes/001-create-students.xml`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="001" author="ivan">
+        <createTable tableName="students">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="first_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="group_name" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email" type="VARCHAR(255)">
+                <constraints unique="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
+```
+
+**Структура Liquibase** (папка `src/main/resources/db/changelog/`):
+
+```
+src/main/resources/db/changelog/
+├── db.changelog-master.xml              ← головний файл, підключає інші
+└── changes/
+    ├── 001-create-students.xml          ← перший changeSet
+    └── 002-add-enrollment-year.xml      ← наступна зміна
+```
+
+Liquibase фіксує виконані changeSets у службовій таблиці `DATABASECHANGELOG`; нові changeSets застосовуються автоматично при старті застосунку.
+
+### Flyway vs Liquibase — коротке порівняння
+
+| Критерій | Flyway | Liquibase |
+|----------|--------|-----------|
+| Формат файлів | SQL (або Java) | XML, YAML, JSON, SQL |
+| Іменування | `V1__назва.sql` (префікс версії) | `<changeSet>` з `id` та `author` |
+| Rollback | не підтримує автоматично | підтримує через тег `rollback` |
+| Службова таблиця | `flyway_schema_history` | `DATABASECHANGELOG` |
+| Складність старту | дуже просто (краще для початківців) | потребує більше налаштувань, гнучкіший для складних проєктів |
+
+> **Порада:** для навчання і невеликих проєктів беріть **Flyway** — простий SQL, мінімум церемоній. **Liquibase** обирайте, коли потрібні rollback, кілька СУБД і складніші сценарії.
+
+---
+
+## Блок 9. `DataSeeder` + тести шару даних
+
+### `DataSeeder` — авто-наповнення БД на старті
+
+Щоразу після перезапуску H2 (in-memory) втрачає дані. Щоб не вводити студентів вручну кожного разу, додаємо клас `DataSeeder`, що реалізує `CommandLineRunner`. Spring викликає метод `run` **автоматично після старту** застосунку. Перевірка кількості записів захищає від дублів при повторному старті.
+
+`src/main/java/com/example/school/DataSeeder.java`:
+
+```java
+package com.example.school;
+
+import com.example.school.student.Student;
+import com.example.school.student.StudentRepository;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Component;
+
+@Component                                          // Spring робить клас біном
+public class DataSeeder implements CommandLineRunner {
+
+    private final StudentRepository repo;
+    public DataSeeder(StudentRepository repo) { this.repo = repo; }
+
+    @Override
+    public void run(String... args) {
+        if (repo.count() > 0) return;               // вже є дані → не дублювати
+        repo.save(new Student("Іван",  "Іваненко",  "КН-11", "ivan@ex.com"));
+        repo.save(new Student("Петро", "Петренко",  "КН-11", "petro@ex.com"));
+        repo.save(new Student("Сидір", "Сидоренко", "КН-12", "sydir@ex.com"));
+    }
+}
+```
+
+> **💡 `DataSeeder` — лише для dev.** Підходить для навчального або dev-середовища. У проді
+> початкові дані вносять **міграціями** (Flyway / Liquibase), а не через `CommandLineRunner`.
 
 ### Тест шару даних — `@DataJpaTest`
 
-Тест лише репозиторію (без web-шару), на вбудованій БД, з відкатом після кожного тесту:
+Анотація `@DataJpaTest` піднімає **лише JPA-шар** (без web-контексту), автоматично підключає in-memory БД і **відкочує зміни після кожного тесту** — тести швидкі й ізольовані. Репозиторій впроваджуємо через `@Autowired`.
 
 `src/test/java/com/example/school/student/StudentRepositoryTest.java`:
 
@@ -943,9 +1125,88 @@ class StudentRepositoryTest {
 
 ---
 
-## Блок 10. Підсумок і міст до практики
+## Блок 10. Фінальна вправа + підсумок і міст до практики
 
-### Що ми зібрали за лекцію
+### Фінальна вправа — пошук студентів із пагінацією
+
+Ця вправа збирає **весь ланцюг** докупи: репозиторій → сервіс → контролер → перевірка. Додаємо ендпоінт `GET /students/search?lastName=Ів` — пошук за частиною прізвища (без урахування регістру) з пагінацією.
+
+**Крок 1 — метод репозиторію** (Spring Data будує запит за назвою; `Pageable` дає номер сторінки, розмір і сортування):
+
+```java
+public interface StudentRepository extends JpaRepository<Student, Long> {
+    // ... існуючі методи
+    Page<Student> findByLastNameContainingIgnoreCase(String lastName, Pageable pageable);
+}
+```
+
+**Крок 2 — метод сервісу** (`readOnly`-транзакція; формуємо `PageRequest` із сортуванням, мапимо кожну сутність у DTO):
+
+```java
+@Transactional(readOnly = true)
+public Page<StudentDto> search(String lastName, int page, int size) {
+    Pageable pageable = PageRequest.of(page, size, Sort.by("lastName").ascending());
+    return repo.findByLastNameContainingIgnoreCase(lastName, pageable)
+               .map(StudentService::toDto);
+}
+```
+
+**Крок 3 — ендпоінт контролера** (`page`/`size` мають значення за замовчуванням):
+
+```java
+// GET /students/search?lastName=Ів&page=0&size=20
+@GetMapping("/search")
+public Page<StudentDto> search(
+        @RequestParam String lastName,
+        @RequestParam(defaultValue = "0")  int page,
+        @RequestParam(defaultValue = "20") int size) {
+    return service.search(lastName, page, size);
+}
+```
+
+**Крок 4 — перевірка `curl`-ом** і читання згенерованого SQL у консолі:
+
+```bash
+curl "http://localhost:8080/students/search?lastName=ів&page=0&size=20"
+```
+
+```json
+{
+  "content": [
+    {"id":1,"firstName":"Іван","lastName":"Іваненко","groupName":"КН-11","email":"ivan@ex.com"}
+  ],
+  "totalElements": 1,
+  "totalPages": 1,
+  "number": 0,
+  "size": 20
+}
+```
+
+Відповідь містить масив `content` зі знайденими студентами плюс метадані пагінації (`totalElements`, `totalPages`).
+
+> **✍ Міні-вправа №4 — `GET /students/{id}` (один студент за id).**
+> **1.** У сервісі — пошук за id, кинути `StudentNotFoundException`, якщо не знайдено:
+> ```java
+> @Transactional(readOnly = true)
+> public StudentDto getById(Long id) {
+>     return repo.findById(id)
+>                .map(StudentService::toDto)
+>                .orElseThrow(() -> new StudentNotFoundException(id));
+> }
+> ```
+> **2.** У контролері — ендпоінт із `@PathVariable`:
+> ```java
+> // GET /students/5
+> @GetMapping("/{id}")
+> public StudentDto getOne(@PathVariable Long id) {
+>     return service.getById(id);
+> }
+> ```
+> **3.** Перевір `curl`-ом обидва сценарії:
+> - `GET /students/1` → **200** + JSON студента;
+> - `GET /students/999` → **404** + `{"error": "..."}` (через `@RestControllerAdvice` з Блоку 5).
+
+### Підсумок — що ми зібрали за лекцію
 
 Повний вертикальний зріз застосунку з БД:
 
@@ -963,8 +1224,9 @@ HTTP → StudentController → StudentService (@Transactional) → StudentReposi
 3. **Три шари**: Controller (HTTP) → Service (логіка+транзакції) → Repository (БД). Не змішувати.
 4. **DTO ≠ Entity** — не віддавай сутність напряму назовні.
 5. **Зв'язки**: `@ManyToOne` (з `@JoinColumn`) — найчастіший; стеж за **LAZY** і **N+1**.
-6. **`@Transactional`** на сервісі; пам'ятай про rollback лише на RuntimeException і про самовиклик.
+6. **`@Transactional`** на сервісі; rollback лише на `RuntimeException`, працює через проксі (тому самовиклик `this.method()` не відкриває транзакцію).
 7. Помилки — через `@RestControllerAdvice`, а не 500.
+8. **Міграції** (Flyway / Liquibase) у проді замість `ddl-auto: update`.
 
 ### Чек-лист «я готовий до практики»
 
@@ -978,12 +1240,7 @@ HTTP → StudentController → StudentService (@Transactional) → StudentReposi
 - [ ] Напишу `@DataJpaTest`.
 - [ ] Запущу застосунок і перевірю кожен ендпоінт через `curl` (200/201/204/400/404/409).
 - [ ] Читаю SQL у консолі (`show-sql`) і впізнаю N+1.
-
-> **✍ Підсумкова вправа (10 хв, у кінці заняття).** Збери все разом: додай ендпоінт
-> `GET /students/search?lastName=Ів` — пошук за частиною прізвища (без урахування регістру),
-> з пагінацією. Кроки: метод у репозиторії (`findByLastNameContainingIgnoreCase` + `Pageable`) →
-> метод сервісу → ендпоінт контролера → перевір `curl`-ом і подивись згенерований SQL у консолі.
-> Це рівно той ланцюг, який ти повторюватимеш на практиці десятки разів.
+- [ ] Розумію, коли потрібні міграції (Flyway / Liquibase) замість `ddl-auto`.
 
 ### Що спробувати на 14 годинах практики (ідеї проєкту)
 
