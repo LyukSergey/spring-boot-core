@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5436/places
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: validate        # у проді Hibernate лише ВАЛІДУЄ схему, створює її Liquibase
+    show-sql: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    # без contexts=dev → застосовується лише схема, демо-датасет НЕ вантажиться
+
+  # ПРИМІТКА: щоб дані переживали перезапуск (вимога DoD), використовуй профіль prod з PostgreSQL.

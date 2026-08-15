@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!-- Створення таблиці places (мапа на @Entity Place).
+         BIGINT autoIncrement PK; name/address NOT NULL; category до 50 символів;
+         lat/lon nullable (координати можуть з'явитись пізніше після геокодування). -->
+    <changeSet id="001-create-places-table" author="places">
+        <createTable tableName="places">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_places" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="address" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="VARCHAR(50)"/>
+            <column name="lat" type="DOUBLE PRECISION"/>
+            <column name="lon" type="DOUBLE PRECISION"/>
+        </createTable>
+
+        <!-- Індекс для пошуку/фільтрації за категорією -->
+        <createIndex tableName="places" indexName="idx_places_category">
+            <column name="category"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="places"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

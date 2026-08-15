@@ -1,0 +1,55 @@
+### Гео-сервіс «Мої місця» — приклади запитів для ручної перевірки.
+### Відкрий у IntelliJ IDEA / VS Code (REST Client) і тисни ▶, або перепиши на curl (нижче).
+### УВАГА: контролер/сервіс — скелети (кидають 501, поки не реалізовані).
+###        Гео-шар і датасет — робочі. Реалізуй Крок 5–6 → запити почнуть повертати дані.
+
+@host = http://localhost:8080
+
+### 1. Створити місце ЗА АДРЕСОЮ — координати підтягнуться з Nominatim самі
+POST {{host}}/places
+Content-Type: application/json
+
+{
+  "name": "Площа Ринок",
+  "address": "Львів, площа Ринок",
+  "category": "меморіал"
+}
+
+### 2. Повтор тієї ж адреси → у мережу НЕ йде (спрацює @Cacheable)
+POST {{host}}/places
+Content-Type: application/json
+
+{
+  "name": "Ринок ще раз",
+  "address": "Львів, площа Ринок",
+  "category": "меморіал"
+}
+
+### 3. Валідація: порожнє name → 400 зі списком полів
+POST {{host}}/places
+Content-Type: application/json
+
+{
+  "name": "",
+  "address": "Львів",
+  "category": "кафе"
+}
+
+### 4. Місця поблизу центру Львова в радіусі 3 км (сортування за відстанню, Haversine)
+GET {{host}}/places/nearby?lat=49.8419&lon=24.0315&radiusKm=3
+
+### 5. За категорією з пагінацією
+GET {{host}}/places?category=меморіал&page=0&size=10
+
+### 6. Пошук за частиною назви
+GET {{host}}/places/search?name=кав
+
+### 7. Видалити місце (404, якщо немає)
+DELETE {{host}}/places/999
+
+###
+### --- curl-еквіваленти ---
+### curl -X POST {{host}}/places -H "Content-Type: application/json" \
+###   -d '{"name":"Площа Ринок","address":"Львів, площа Ринок","category":"меморіал"}'
+### curl "{{host}}/places/nearby?lat=49.8419&lon=24.0315&radiusKm=3"
+### curl "{{host}}/places?category=меморіал&page=0&size=10"

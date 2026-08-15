@@ -1,0 +1,25 @@
+spring:
+  datasource:
+  #    url: jdbc:h2:mem:places;DB_CLOSE_DELAY=-1   # H2 для розробки; PostgreSQL — профіль prod
+  #    username: sa
+  #    password: ""
+    url: jdbc:postgresql://localhost:5436/places
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: none        # схемою керує Liquibase, не Hibernate
+    show-sql: true
+    properties:
+      hibernate.format_sql: true
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    contexts: dev           # у dev вантажимо демо-датасет (changeSet context="dev")
+  h2:
+    console:
+      enabled: true                             # http://localhost:8080/h2-console
+
+nominatim:
+  base-url: "https://nominatim.openstreetmap.org"
+  # ПРАВИЛО Nominatim: обов'язковий свій User-Agent із контактом. Без нього блокують (403).
+  user-agent: "student-places-app/1.0 (lyukstermoizol@gmail.com)"

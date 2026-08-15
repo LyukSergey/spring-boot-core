@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!-- Датасет реальних місць Львова (+ Київ як «далеке»).
+         Завантажується лише в контексті "dev" (spring.liquibase.contexts=dev),
+         щоб у prod демо-дані не потрапляли — аналог колишнього sql.init.mode=never.
+         Центр відліку для перевірки nearby: площа Ринок (49.8419, 24.0315). -->
+    <changeSet id="002-seed-places" author="places" context="dev">
+        <insert tableName="places">
+            <column name="name" value="Площа Ринок"/>
+            <column name="address" value="Львів, площа Ринок"/>
+            <column name="category" value="меморіал"/>
+            <column name="lat" valueNumeric="49.8419"/>
+            <column name="lon" valueNumeric="24.0315"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Львівська Ратуша"/>
+            <column name="address" value="Львів, площа Ринок, 1"/>
+            <column name="category" value="меморіал"/>
+            <column name="lat" valueNumeric="49.8417"/>
+            <column name="lon" valueNumeric="24.0322"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Кав'ярня Світ Кави"/>
+            <column name="address" value="Львів, площа Ринок, 6"/>
+            <column name="category" value="кафе"/>
+            <column name="lat" valueNumeric="49.8422"/>
+            <column name="lon" valueNumeric="24.0318"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Львівська Майстерня Шоколаду"/>
+            <column name="address" value="Львів, вул. Сербська, 3"/>
+            <column name="category" value="кафе"/>
+            <column name="lat" valueNumeric="49.8408"/>
+            <column name="lon" valueNumeric="24.0330"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Оперний театр"/>
+            <column name="address" value="Львів, проспект Свободи, 28"/>
+            <column name="category" value="меморіал"/>
+            <column name="lat" valueNumeric="49.8443"/>
+            <column name="lon" valueNumeric="24.0264"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Личаківський цвинтар"/>
+            <column name="address" value="Львів, вул. Мечникова, 33"/>
+            <column name="category" value="меморіал"/>
+            <column name="lat" valueNumeric="49.8339"/>
+            <column name="lon" valueNumeric="24.0530"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Високий Замок"/>
+            <column name="address" value="Львів, парк Високий Замок"/>
+            <column name="category" value="парк"/>
+            <column name="lat" valueNumeric="49.8503"/>
+            <column name="lon" valueNumeric="24.0378"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Кафе Друзі"/>
+            <column name="address" value="Львів, вул. Театральна, 22"/>
+            <column name="category" value="кафе"/>
+            <column name="lat" valueNumeric="49.8437"/>
+            <column name="lon" valueNumeric="24.0300"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Друг живе тут"/>
+            <column name="address" value="Львів, вул. Городоцька, 100"/>
+            <column name="category" value="друг"/>
+            <column name="lat" valueNumeric="49.8380"/>
+            <column name="lon" valueNumeric="24.0000"/>
+        </insert>
+        <insert tableName="places">
+            <column name="name" value="Церква Святого Юра"/>
+            <column name="address" value="Львів, площа Святого Юра, 5"/>
+            <column name="category" value="меморіал"/>
+            <column name="lat" valueNumeric="49.8385"/>
+            <column name="lon" valueNumeric="24.0130"/>
+        </insert>
+        <!-- Далеке місце (Київ) — має відсіюватись у пошуку в радіусі кількох км від Львова -->
+        <insert tableName="places">
+            <column name="name" value="Майдан Незалежності"/>
+            <column name="address" value="Київ, майдан Незалежності"/>
+            <column name="category" value="меморіал"/>
+            <column name="lat" valueNumeric="50.4501"/>
+            <column name="lon" valueNumeric="30.5234"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="places"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

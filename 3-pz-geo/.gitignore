@@ -32,3 +32,30 @@ build/
 ### VS Code ###
 .vscode/
 pz-3-geo.md
+
+### OS ###
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+### Logs / dumps ###
+*.log
+logs/
+hs_err_pid*
+replay_pid*
+*.dump
+*.dumpstream
+
+### Local databases (H2) ###
+*.db
+*.mv.db
+*.trace.db
+
+### Env / local secrets ###
+.env
+*.local
+application-local.yml
+application-local.yaml
+application-local.properties
+
+README.md

@@ -1,0 +1,20 @@
+services:
+  db:
+    image:  postgres:16-alpine
+    container_name: places-postgres
+    environment:
+      POSTGRES_DB: places
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
+    volumes:
+      - places-pgdata:/var/lib/postgresql/data     # дані переживають перезапуск контейнера (вимога DoD)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d places"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  places-pgdata:
